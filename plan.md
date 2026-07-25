@@ -56,8 +56,8 @@ Goal: an authenticated user opens the web app, talks to the agent (streaming STT
 - [x] Seed script (idempotent): roles, `v0.1.0` agent version, default turn-detection config. Dev login user moves to the auth chunk (needs password hashing).
 
 ### 3.3 Auth
-- [ ] Signup/login/refresh/logout, bcrypt/argon2, JWT access + refresh, role claim.
-- [ ] `POST /api/v1/voice/token`: mints a LiveKit room token for the authenticated user and creates the `conversations` row.
+- [x] Signup/login/refresh/logout/me, argon2 hashing, JWT access + refresh with single-use rotation and Redis-backed revocation, role claim, `require_roles` RBAC dependency. Verified over HTTP including failure paths.
+- [ ] `POST /api/v1/voice/token`: mints a LiveKit room token for the authenticated user and creates the `conversations` row. (Moves to the voice-agent chunk — needs LiveKit credentials.)
 
 ### 3.4 Voice agent worker
 - [ ] LiveKit Agents worker: Silero VAD → Deepgram STT → Claude → ElevenLabs TTS.
