@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     seed_admin_email: str = "admin@voiceai.local"
     seed_admin_password: str = "admin-dev-password"
 
+    # Realtime voice providers. Values live in backend/.env (gitignored) locally
+    # and in the platform secret store when deployed. Empty string = not
+    # configured; the voice endpoints return 503 rather than failing cryptically.
+    livekit_url: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+    deepgram_api_key: str = ""
+    openai_api_key: str = ""
+    groq_api_key: str = ""
+    elevenlabs_api_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -10,7 +10,7 @@ Companion to [requirement.md](requirement.md). This document tracks the decision
 |---|----------|--------|-----------|
 | D1 | Voice framework | **LiveKit Agents (Python)** — proposed | Built-in WebRTC infra (LiveKit Cloud free tier), first-class SIP for Phase 4 telephony, built-in VAD/turn-detection/barge-in, provider plugins for Deepgram/ElevenLabs/Cartesia/OpenAI/Anthropic, metrics API that maps directly to the PRD §7.3 latency-tracing requirement. Pipecat is the alternative if we prefer Daily. |
 | D2 | STT | **Deepgram** (streaming, partials, word timestamps) — proposed | Nova models support English + Hindi + code-switching (`multi`). Fallback/alternative for Hinglish quality: Google STT or Sarvam AI (evaluate in Phase 5). |
-| D3 | LLM | **Anthropic Claude** (Sonnet to start; measure latency, consider Haiku for the realtime path) — proposed | Strong tool-use reliability for confirmation-gated actions. Any tool-capable model is swappable behind the orchestrator interface. |
+| D3 | LLM | **OpenAI (`gpt-4o-mini`, primary) + Groq (fast alternative)** — user decision 2026-07-25 | Both ride OpenAI-compatible APIs via LiveKit plugins; the active `agent_versions` row picks the provider, so switching (or A/B latency comparison) is a data change, not a deploy. |
 | D4 | TTS | **ElevenLabs Flash v2.5** (multilingual incl. Hindi, low first-audio latency) — proposed | Cartesia Sonic is the backup; both stream and support barge-in cancellation. |
 | D5 | Hosting posture | **Managed/free-tier first**: LiveKit Cloud + Neon Postgres (pgvector) + Upstash Redis + Fly.io/Railway (Python services) + Vercel (Next.js) + Cloudflare R2 (audio) — proposed | PRD §12 suggests AWS; for a portfolio project the managed stack cuts cost/ops dramatically and everything has an AWS-equivalent migration path. Revisit if AWS experience itself is a portfolio goal. |
 | D6 | Telephony (Phase 4) | **Open — decide by end of Phase 3.** Twilio (easiest LiveKit SIP integration; US number, so calling it from India costs ISD) vs Exotel/Plivo (Indian numbers, more integration work) | India inbound-number regulations make this the highest-risk external dependency. Prototype with Twilio trial; validate Exotel media-streaming access early. |
@@ -57,15 +57,16 @@ Goal: an authenticated user opens the web app, talks to the agent (streaming STT
 
 ### 3.3 Auth
 - [x] Signup/login/refresh/logout/me, argon2 hashing, JWT access + refresh with single-use rotation and Redis-backed revocation, role claim, `require_roles` RBAC dependency. Verified over HTTP including failure paths.
-- [ ] `POST /api/v1/voice/token`: mints a LiveKit room token for the authenticated user and creates the `conversations` row. (Moves to the voice-agent chunk — needs LiveKit credentials.)
+- [x] `POST /api/v1/voice/token`: mints a room-scoped LiveKit token for the authenticated user and creates the `conversations` row. Verified incl. 401 unauthenticated.
 
 ### 3.4 Voice agent worker
-- [ ] LiveKit Agents worker: Silero VAD → Deepgram STT → Claude → ElevenLabs TTS.
-- [ ] Barge-in: interruption enabled; on interrupt, cancel TTS, record interruption event, truncate assistant turn to what was actually spoken.
-- [ ] Turn-detection config: endpointing delay, min speech duration, max silence — all in `provider_configs`, not hard-coded.
-- [ ] Event hooks → persistence: partial/final transcripts, turn records, state events (GREETING → … minimal set for M1), errors.
-- [ ] Latency capture per turn from agent metrics: STT first-partial/final, LLM TTFT, TTS TTFB, total response latency → `turn_latency_metrics`.
-- [ ] Graceful shutdown: session end persists final state + summary row.
+- [x] LiveKit Agents worker (v1.6.7): Silero VAD → Deepgram STT → OpenAI/Groq LLM (chosen by active agent version) → ElevenLabs TTS. Registers with LiveKit Cloud (verified, India South region).
+- [x] Barge-in: AgentSession interruption handling; interrupted assistant turns stored with `interrupted=true` and played-content truncation.
+- [x] Turn-detection config read from `provider_configs.turn_detection.default`, not hard-coded.
+- [x] Event hooks → persistence via ConversationRecorder: partials (buffered into turn.extra), final turns, state events, ad-hoc room handling.
+- [x] Latency capture per turn: STT transcription delay, LLM TTFT, TTS TTFB, computed total → `turn_latency_metrics` (+ raw JSONB).
+- [x] Graceful shutdown callback finalizes the conversation row.
+- [ ] Live audio verification (user speaks to the agent, then inspect persisted turns/latency).
 
 ### 3.5 Web client
 - [ ] Next.js app with login; voice page: mic permission, join LiveKit room, connection status, mute, end session.

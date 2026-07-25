@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
+from app.api.voice import router as voice_router
 from app.core import db
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     # Health endpoints stay unversioned: infra probes shouldn't break on API v2.
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(voice_router, prefix="/api/v1")
     return app
 
 

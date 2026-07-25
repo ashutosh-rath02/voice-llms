@@ -41,8 +41,8 @@ INITIAL_AGENT_VERSION = {
         "If you did not understand the user, ask them to repeat rather than guessing. "
         "If the user asks for something you cannot do yet, say so honestly."
     ),
-    "llm_provider": "anthropic",
-    "llm_model": "claude-sonnet-5",
+    "llm_provider": "openai",
+    "llm_model": "gpt-4o-mini",
     "stt_provider": "deepgram",
     "stt_model": "nova-2",
     "tts_provider": "elevenlabs",

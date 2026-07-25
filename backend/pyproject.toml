@@ -16,6 +16,8 @@ dependencies = [
     "pwdlib[argon2]>=0.2",
     "python-multipart>=0.0.9",
     "email-validator>=2.0",
+    "livekit-agents[deepgram,openai,elevenlabs,groq,silero]>=1.2",
+    "livekit-api>=1.0",
 ]
 
 [project.optional-dependencies]
