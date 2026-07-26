@@ -148,8 +148,13 @@ export default function CallPage() {
   const router = useRouter();
   const [session, setSession] = useState<VoiceSession | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // POST /voice/token creates a conversation row — not idempotent. React
+  // StrictMode double-mounts effects in dev, so guard against firing twice.
+  const requested = useRef(false);
 
   useEffect(() => {
+    if (requested.current) return;
+    requested.current = true;
     (async () => {
       try {
         setSession(await apiFetch<VoiceSession>("/voice/token", { method: "POST" }));
