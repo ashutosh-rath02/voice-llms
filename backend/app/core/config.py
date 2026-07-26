@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     app_env: str = "dev"  # dev | staging | prod
     log_level: str = "INFO"
 
+    # Comma-separated browser origins allowed to call this API (CORS).
+    # Staging adds the Vercel URL, e.g. "https://voiceai-web.vercel.app".
+    cors_origins: str = "http://localhost:3000"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     database_url: str = "postgresql+asyncpg://voiceai:voiceai_dev@localhost:5432/voiceai"
     redis_url: str = "redis://localhost:6379/0"
 

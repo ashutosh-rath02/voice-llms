@@ -69,18 +69,21 @@ Goal: an authenticated user opens the web app, talks to the agent (streaming STT
 - [ ] Live audio verification (user speaks to the agent, then inspect persisted turns/latency).
 
 ### 3.5 Web client
-- [ ] Next.js app with login; voice page: mic permission, join LiveKit room, connection status, mute, end session.
-- [ ] Live transcript pane (partials render then finalize), speaking indicators for both parties.
-- [ ] Reconnect handling + fallback message when unrecoverable.
+- [x] Next.js 16 app (TypeScript, Tailwind 4) with login; voice page joins the LiveKit room with mic, agent-state pill, mute, end-call.
+- [x] Live transcript pane via room transcription events (partials at reduced opacity, replaced in place when final); agent state indicator (listening/thinking/speaking).
+- [x] Reconnecting banner (LiveKit auto-reconnect) + mic-failure fallback message. CORS middleware added to API (was missing — blocked all browser calls).
+- [ ] Live browser test by user.
 
 ### 3.6 Replay
-- [ ] `GET /conversations` + detail endpoint: turns, state history, latency per turn.
-- [ ] Replay page: transcript timeline with per-turn latency chips and interruption markers.
+- [x] `GET /conversations` + detail endpoint: turns, state history, latency per turn; customers see own, staff see all; foreign ids 404.
+- [x] Replay page: transcript timeline with per-turn latency chips (total >2s highlighted), interruption badges, expandable STT partials, state timeline.
 
 ### 3.7 Staging deployment
-- [ ] LiveKit Cloud project; Neon Postgres; deploy backend (API + agent worker) to Fly.io/Railway; web to Vercel.
-- [ ] Secrets via platform env stores; HTTPS/WSS everywhere.
-- [ ] Smoke test: scripted text-mode session against the deployed agent (seed of the Phase 6 eval harness).
+- [x] Backend Dockerfile (single image, API + worker commands; voice models baked at build; migrations on boot) + .dockerignore.
+- [x] CI (GitHub Actions): ruff + import smoke, web lint + build, docker build.
+- [x] Deployment runbook: [docs/deployment.md](docs/deployment.md) — Railway (Postgres/pgvector + Redis + api + worker) + Vercel (web) + LiveKit staging project.
+- [ ] User: create Railway + Vercel accounts, LiveKit staging project (see runbook §one-time setup).
+- [ ] Provision services, set env vars, deploy, seed, smoke test.
 
 ### Exit criteria (from PRD)
 - A real voice conversation completes end-to-end in the browser on staging.

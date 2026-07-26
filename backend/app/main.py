@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 import redis.asyncio as aioredis
 import structlog
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.conversations import router as conversations_router
@@ -41,6 +42,15 @@ def create_app() -> FastAPI:
     configure_logging(settings.log_level, json_output=settings.app_env != "dev")
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    # The browser app runs on a different origin (localhost:3000 in dev,
+    # Vercel in staging); without this, browsers silently block every call.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     # Health endpoints stay unversioned: infra probes shouldn't break on API v2.
     app.include_router(health_router)
     app.include_router(auth_router, prefix="/api/v1")
