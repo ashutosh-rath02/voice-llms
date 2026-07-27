@@ -36,6 +36,23 @@ class StateEventOut(BaseModel):
     created_at: datetime
 
 
+class RetrievalResultOut(BaseModel):
+    chunk_id: str
+    document_title: str
+    document_url: str | None
+    score: float
+    vector_rank: int | None
+    fts_rank: int | None
+
+
+class RetrievalEventOut(BaseModel):
+    query: str
+    strategy: str
+    latency_ms: int
+    created_at: datetime
+    results: list[RetrievalResultOut]
+
+
 class ConversationSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,3 +70,4 @@ class ConversationDetail(ConversationSummary):
     agent_version_label: str
     turns: list[TurnOut]
     state_events: list[StateEventOut]
+    retrieval_events: list[RetrievalEventOut]

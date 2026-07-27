@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { apiFetch, UnauthorizedError } from "@/lib/api";
-import { ConversationDetail, LatencyOut } from "@/lib/types";
+import { ConversationDetail, LatencyOut, RetrievalEventOut } from "@/lib/types";
 
 function LatencyChips({ latency }: { latency: LatencyOut }) {
   const chips: [string, number | null][] = [
@@ -34,6 +34,56 @@ function LatencyChips({ latency }: { latency: LatencyOut }) {
           ),
       )}
     </div>
+  );
+}
+
+function RetrievalEvidence({ events }: { events: RetrievalEventOut[] }) {
+  if (events.length === 0) return null;
+  return (
+    <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+      <h2 className="mb-2 text-sm font-medium text-slate-300">
+        Knowledge lookups ({events.length})
+      </h2>
+      <div className="space-y-3">
+        {events.map((e, i) => (
+          <div key={i} className="rounded-lg bg-slate-800/50 p-3 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-medium text-slate-200">&ldquo;{e.query}&rdquo;</p>
+              <span className="font-mono text-[10px] text-slate-500">{e.latency_ms}ms</span>
+            </div>
+            {e.results.length === 0 ? (
+              <p className="mt-1.5 text-xs text-amber-400">
+                No relevant documentation found — agent should have said so, not guessed.
+              </p>
+            ) : (
+              <ul className="mt-1.5 space-y-1">
+                {e.results.map((r) => (
+                  <li key={r.chunk_id} className="flex items-center gap-2 text-xs">
+                    <span className="rounded bg-slate-700 px-1 py-0.5 font-mono text-[10px] text-slate-400">
+                      {r.vector_rank && `v#${r.vector_rank}`}
+                      {r.vector_rank && r.fts_rank && " "}
+                      {r.fts_rank && `f#${r.fts_rank}`}
+                    </span>
+                    {r.document_url ? (
+                      <a
+                        href={r.document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sky-400 hover:underline"
+                      >
+                        {r.document_title}
+                      </a>
+                    ) : (
+                      <span className="text-slate-300">{r.document_title}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -92,6 +142,8 @@ export default function ReplayPage() {
             ))}
           </div>
         </section>
+
+        <RetrievalEvidence events={detail.retrieval_events} />
 
         <section className="space-y-3">
           {detail.turns.map((t) => (

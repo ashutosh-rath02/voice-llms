@@ -5,10 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
-from app.models import AgentVersion, Conversation, ConversationTurn, RoleName
+from app.models import AgentVersion, Conversation, ConversationTurn, RetrievalEvent, RoleName
 from app.schemas.conversations import (
     ConversationDetail,
     ConversationSummary,
+    RetrievalEventOut,
     StateEventOut,
     TurnOut,
 )
@@ -72,6 +73,14 @@ async def get_conversation(
         )
     ).scalar_one()
 
+    retrieval_events = (
+        await session.execute(
+            select(RetrievalEvent)
+            .where(RetrievalEvent.conversation_id == conversation.id)
+            .order_by(RetrievalEvent.created_at)
+        )
+    ).scalars().all()
+
     return ConversationDetail(
         **ConversationSummary.model_validate(conversation).model_dump(),
         agent_version_label=agent_version_label,
@@ -89,4 +98,14 @@ async def get_conversation(
             for t in conversation.turns
         ],
         state_events=[StateEventOut.model_validate(e) for e in conversation.state_events],
+        retrieval_events=[
+            RetrievalEventOut(
+                query=e.query,
+                strategy=e.strategy,
+                latency_ms=e.latency_ms,
+                created_at=e.created_at,
+                results=e.results,
+            )
+            for e in retrieval_events
+        ],
     )

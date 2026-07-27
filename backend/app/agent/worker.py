@@ -16,9 +16,11 @@ import structlog
 from livekit import agents
 from livekit.agents import Agent, AgentSession, JobContext, WorkerOptions, cli
 from livekit.plugins import deepgram, elevenlabs, groq, openai, silero
+from openai import AsyncOpenAI
 from sqlalchemy import select
 
 from app.agent.recorder import ConversationRecorder
+from app.agent.tools import SessionData, search_knowledge_base
 from app.core import db
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -90,12 +92,19 @@ async def entrypoint(ctx: JobContext) -> None:
     settings = get_settings()
     engine = db.create_engine(settings)
     sessions = db.create_session_factory(engine)
+    openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     conversation, agent_version, turn_config = await load_session_context(
         sessions, ctx.room.name
     )
     recorder = ConversationRecorder(sessions, conversation.id)
     await recorder.start()
+    session_data = SessionData(
+        db_sessions=sessions,
+        openai_client=openai_client,
+        settings=settings,
+        conversation_id=str(conversation.id),
+    )
     log.info(
         "voice_session_starting",
         room=ctx.room.name,
@@ -104,7 +113,8 @@ async def entrypoint(ctx: JobContext) -> None:
         llm=f"{agent_version.llm_provider}/{agent_version.llm_model}",
     )
 
-    session = AgentSession(
+    session = AgentSession[SessionData](
+        userdata=session_data,
         vad=ctx.proc.userdata.get("vad") or silero.VAD.load(),
         stt=deepgram.STT(
             model=agent_version.stt_model,
@@ -143,12 +153,16 @@ async def entrypoint(ctx: JobContext) -> None:
         try:
             await recorder.finish(ConversationStatus.COMPLETED, outcome="session_ended")
         finally:
+            await openai_client.close()
             await engine.dispose()
 
     ctx.add_shutdown_callback(finalize)
 
     await ctx.connect()
-    await session.start(agent=Agent(instructions=agent_version.system_prompt), room=ctx.room)
+    agent = Agent(
+        instructions=agent_version.system_prompt, tools=[search_knowledge_base]
+    )
+    await session.start(agent=agent, room=ctx.room)
     await recorder.record_state(AgentState.GREETING, reason="session_started")
     await session.generate_reply(
         instructions="Greet the caller briefly and ask how you can help."

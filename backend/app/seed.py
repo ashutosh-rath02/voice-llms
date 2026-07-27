@@ -1,4 +1,4 @@
-"""Idempotent seed data: roles, the v0 agent version, default turn-detection config.
+"""Idempotent seed data: roles, agent versions, default turn-detection config.
 
 Run with:  python -m app.seed
 
@@ -7,12 +7,17 @@ keys (role name, version label, config name), so existing rows are never
 duplicated or overwritten. Per the PRD, seed data goes through the same
 database as production writes; the dev login user is seeded in the auth chunk
 where password hashing lives.
+
+Agent versions are append-only history: once a conversation references a
+version, its prompt/model config never changes — a new capability ships as a
+new version_label, and `seed()` flips exactly one row to ACTIVE. `status` is
+the one mutable field on this table by design (see models/agent.py).
 """
 
 import asyncio
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -30,26 +35,61 @@ ROLES = [
     {"name": RoleName.CUSTOMER, "description": "Own conversations only"},
 ]
 
-INITIAL_AGENT_VERSION = {
-    "version_label": "v0.1.0",
-    "status": AgentVersionStatus.ACTIVE,
-    "system_prompt": (
-        "You are a friendly customer-support voice agent. You are speaking with the "
-        "user over live audio, so keep every response short — one to three sentences — "
-        "and conversational. Never use markdown, bullet points, or emoji. "
-        "Spell out numbers and identifiers digit by digit when confirming them. "
-        "If you did not understand the user, ask them to repeat rather than guessing. "
-        "If the user asks for something you cannot do yet, say so honestly."
-    ),
-    "llm_provider": "openai",
-    "llm_model": "gpt-4o-mini",
-    "stt_provider": "deepgram",
-    "stt_model": "nova-2",
-    "tts_provider": "elevenlabs",
-    "tts_model": "eleven_flash_v2_5",
-    "tts_voice": "pending-selection",
-    "config": {"llm_temperature": 0.4},
-}
+VOICE_STYLE_RULES = (
+    "You are speaking with the user over live audio, so keep every response short — "
+    "one to three sentences — and conversational. Never use markdown, bullet points, "
+    "or emoji. Spell out numbers and identifiers digit by digit when confirming them. "
+    "If you did not understand the user, ask them to repeat rather than guessing."
+)
+
+AGENT_VERSIONS = [
+    {
+        "version_label": "v0.1.0",
+        "status": AgentVersionStatus.ACTIVE,  # historical; demoted below once v0.2.0 exists
+        "system_prompt": (
+            f"You are a friendly customer-support voice agent. {VOICE_STYLE_RULES} "
+            "If the user asks for something you cannot do yet, say so honestly."
+        ),
+        "llm_provider": "openai",
+        "llm_model": "gpt-4o-mini",
+        "stt_provider": "deepgram",
+        "stt_model": "nova-2",
+        "tts_provider": "elevenlabs",
+        "tts_model": "eleven_flash_v2_5",
+        "tts_voice": "pending-selection",
+        "config": {"llm_temperature": 0.4},
+    },
+    {
+        "version_label": "v0.2.0",
+        "status": AgentVersionStatus.ACTIVE,
+        "system_prompt": (
+            "You are a friendly customer-support voice agent for smart-home device "
+            f"support. {VOICE_STYLE_RULES}\n\n"
+            "You have a search_knowledge_base tool over real product documentation. "
+            "Whenever the user asks how to set up, configure, or fix a specific device "
+            "or integration, call the tool with their question before answering — do "
+            "not answer setup steps, settings, or troubleshooting details from memory. "
+            "When you answer from the tool's results, mention which product or "
+            "integration the information is about so the user knows it is grounded, "
+            "not guessed.\n\n"
+            "If the tool finds nothing relevant, or you are not confident the results "
+            "actually answer what the user asked, say plainly that you don't have "
+            "reliable information on that and offer to connect them with a human "
+            "support agent. Never invent setup steps, settings, or error resolutions."
+        ),
+        "llm_provider": "openai",
+        "llm_model": "gpt-4o-mini",
+        "stt_provider": "deepgram",
+        "stt_model": "nova-2",
+        "tts_provider": "elevenlabs",
+        "tts_model": "eleven_flash_v2_5",
+        "tts_voice": "pending-selection",
+        "config": {"llm_temperature": 0.4},
+    },
+]
+
+# Exactly one AgentVersion is ACTIVE at a time; this is the one seed() enforces.
+ACTIVE_VERSION_LABEL = "v0.2.0"
 
 DEFAULT_TURN_DETECTION = {
     "name": "turn_detection.default",
@@ -85,12 +125,38 @@ async def seed(engine: AsyncEngine, settings: Settings) -> None:
         )
         log.info("seeded_admin_user", inserted=result.rowcount, email=settings.seed_admin_email)
 
+        for version in AGENT_VERSIONS:
+            result = await session.execute(
+                insert(AgentVersion)
+                .values(**version)
+                .on_conflict_do_nothing(index_elements=["version_label"])
+            )
+            log.info(
+                "seeded_agent_version", label=version["version_label"], inserted=result.rowcount
+            )
+
+        # Enforce exactly one ACTIVE version regardless of history above —
+        # status is mutable operational metadata, not part of a version's
+        # immutable content.
         result = await session.execute(
-            insert(AgentVersion)
-            .values(**INITIAL_AGENT_VERSION)
-            .on_conflict_do_nothing(index_elements=["version_label"])
+            update(AgentVersion)
+            .where(
+                AgentVersion.version_label != ACTIVE_VERSION_LABEL,
+                AgentVersion.status == AgentVersionStatus.ACTIVE,
+            )
+            .values(status=AgentVersionStatus.INACTIVE)
         )
-        log.info("seeded_agent_version", inserted=result.rowcount)
+        result2 = await session.execute(
+            update(AgentVersion)
+            .where(AgentVersion.version_label == ACTIVE_VERSION_LABEL)
+            .values(status=AgentVersionStatus.ACTIVE)
+        )
+        log.info(
+            "active_agent_version_enforced",
+            active=ACTIVE_VERSION_LABEL,
+            demoted=result.rowcount,
+            confirmed=result2.rowcount,
+        )
 
         result = await session.execute(
             insert(ProviderConfig)

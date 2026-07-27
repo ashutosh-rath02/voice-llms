@@ -39,6 +39,23 @@ export interface StateEventOut {
   created_at: string;
 }
 
+export interface RetrievalResultOut {
+  chunk_id: string;
+  document_title: string;
+  document_url: string | null;
+  score: number;
+  vector_rank: number | null;
+  fts_rank: number | null;
+}
+
+export interface RetrievalEventOut {
+  query: string;
+  strategy: string;
+  latency_ms: number;
+  created_at: string;
+  results: RetrievalResultOut[];
+}
+
 export interface ConversationSummary {
   id: string;
   room_name: string | null;
@@ -54,4 +71,5 @@ export interface ConversationDetail extends ConversationSummary {
   agent_version_label: string;
   turns: TurnOut[];
   state_events: StateEventOut[];
+  retrieval_events: RetrievalEventOut[];
 }
