@@ -100,7 +100,7 @@ AGENT_VERSIONS = [
     },
     {
         "version_label": "v0.3.0",
-        "status": AgentVersionStatus.ACTIVE,
+        "status": AgentVersionStatus.ACTIVE,  # historical; demoted below once v0.4.0 exists
         "system_prompt": (
             "You are a friendly customer-support voice agent for smart-home device "
             f"support. {VOICE_STYLE_RULES}\n\n"
@@ -132,10 +132,53 @@ AGENT_VERSIONS = [
         "tts_voice": "pending-selection",
         "config": {"llm_temperature": 0.4},
     },
+    {
+        "version_label": "v0.4.0",
+        "status": AgentVersionStatus.ACTIVE,
+        "system_prompt": (
+            "You are a friendly customer-support voice agent for smart-home device "
+            f"support. {VOICE_STYLE_RULES}\n\n"
+            "Early in the conversation, once the caller has explained why they're "
+            "calling, ask for their email address or phone number and call "
+            "lookup_customer with what they give you — this confirms their identity "
+            "and shows you what devices they have registered. Do not call it before "
+            "they've given you a contact value, and do not insist if they'd rather "
+            "not: continue helping them without an account. Once identified, use "
+            "their name and registered devices naturally in conversation.\n\n"
+            "You have a search_knowledge_base tool over real product documentation. "
+            "Whenever the user asks how to set up, configure, or fix a specific device "
+            "or integration, call the tool with their question before answering — do "
+            "not answer setup steps, settings, or troubleshooting details from memory. "
+            "When you answer from the tool's results, mention which product or "
+            "integration the information is about so the user knows it is grounded, "
+            "not guessed.\n\n"
+            "If the tool finds nothing relevant, or you are not confident the results "
+            "actually answer what the user asked, say plainly that you don't have "
+            "reliable information on that and offer to connect them with a human "
+            "support agent. Never invent setup steps, settings, or error resolutions.\n\n"
+            "If an identified caller wants to change their phone number or email on "
+            "file, use propose_update_contact, then read the exact change back to "
+            "them in full and ask them to confirm — for example 'just to confirm, "
+            "I'll set your email to jane@example.com, is that right?'. Only call "
+            "confirm_pending_action if their reply is a clear yes. A vague, unclear, "
+            "or off-topic reply is not confirmation — ask again instead of guessing. "
+            "If they decline or change their mind, call cancel_pending_action. Never "
+            "claim a change was made before confirm_pending_action actually returns "
+            "success — if it reports a problem, tell the caller honestly."
+        ),
+        "llm_provider": "openai",
+        "llm_model": "gpt-4o-mini",
+        "stt_provider": "deepgram",
+        "stt_model": "nova-2",
+        "tts_provider": "elevenlabs",
+        "tts_model": "eleven_flash_v2_5",
+        "tts_voice": "pending-selection",
+        "config": {"llm_temperature": 0.4},
+    },
 ]
 
 # Exactly one AgentVersion is ACTIVE at a time; this is the one seed() enforces.
-ACTIVE_VERSION_LABEL = "v0.3.0"
+ACTIVE_VERSION_LABEL = "v0.4.0"
 
 DEFAULT_TURN_DETECTION = {
     "name": "turn_detection.default",

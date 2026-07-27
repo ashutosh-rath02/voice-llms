@@ -28,6 +28,7 @@ from app.models.knowledge import (
     KnowledgeDocument,
     RetrievalEvent,
 )
+from app.models.tool_execution import ToolConfirmation, ToolExecution, ToolExecutionStatus
 from app.models.user import Role, RoleName, User
 
 __all__ = [
@@ -54,6 +55,9 @@ __all__ = [
     "RetrievalEvent",
     "Role",
     "RoleName",
+    "ToolConfirmation",
+    "ToolExecution",
+    "ToolExecutionStatus",
     "TurnLatencyMetric",
     "TurnRole",
     "User",

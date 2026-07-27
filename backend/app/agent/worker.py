@@ -19,8 +19,19 @@ from livekit.plugins import deepgram, elevenlabs, groq, openai, silero
 from openai import AsyncOpenAI
 from sqlalchemy import select
 
+# Import for side effect: registers every confirmable action's executor
+# (app.services.customers.execute_update_contact, and future ticket/booking/
+# messaging ones) into app.agent.confirmation.EXECUTORS before any call starts.
+import app.services  # noqa: F401
 from app.agent.recorder import ConversationRecorder
-from app.agent.tools import SessionData, lookup_customer, search_knowledge_base
+from app.agent.tools import (
+    SessionData,
+    cancel_pending_action,
+    confirm_pending_action,
+    lookup_customer,
+    propose_update_contact,
+    search_knowledge_base,
+)
 from app.core import db
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -161,7 +172,13 @@ async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
     agent = Agent(
         instructions=agent_version.system_prompt,
-        tools=[search_knowledge_base, lookup_customer],
+        tools=[
+            search_knowledge_base,
+            lookup_customer,
+            propose_update_contact,
+            confirm_pending_action,
+            cancel_pending_action,
+        ],
     )
     await session.start(agent=agent, room=ctx.room)
     await recorder.record_state(AgentState.GREETING, reason="session_started")

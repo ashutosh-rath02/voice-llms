@@ -16,6 +16,11 @@ from openai import AsyncOpenAI
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.agent.confirmation import (
+    confirm_tool_execution,
+    propose_tool_execution,
+    reject_tool_execution,
+)
 from app.core.config import Settings
 from app.knowledge.retrieval import hybrid_search
 from app.models import (
@@ -27,6 +32,8 @@ from app.models import (
     CustomerProductStatus,
     ProductOrService,
 )
+
+UPDATE_CONTACT_TOOL_NAME = "update_contact_info"  # dispatch key; impl in app.services.customers
 
 log = structlog.get_logger()
 
@@ -158,3 +165,58 @@ async def run_customer_lookup(data: SessionData, contact_value: str) -> str:
 async def lookup_customer(ctx: RunContext[SessionData], contact_value: str) -> str:
     """Args: contact_value: the email or phone number the caller provided."""
     return await run_customer_lookup(ctx.userdata, contact_value)
+
+
+@function_tool(
+    description=(
+        "Propose updating the caller's phone number or email on file. Requires "
+        "the caller to already be identified via lookup_customer. This only "
+        "records the proposal — it does not change anything yet. After calling "
+        "this, read the proposed change back to the caller and wait for their "
+        "next reply; only call confirm_pending_action if they clearly agree."
+    )
+)
+async def propose_update_contact(
+    ctx: RunContext[SessionData], contact_type: str, value: str
+) -> str:
+    """Args: contact_type: "email" or "phone". value: the new contact value."""
+    data = ctx.userdata
+    async with data.db_sessions() as session:
+        conversation = await session.get(Conversation, data.conversation_id)
+        if conversation is None or conversation.customer_id is None:
+            return "I need to identify the caller with lookup_customer before proposing this."
+        customer_id = str(conversation.customer_id)
+
+    execution = await propose_tool_execution(
+        data,
+        tool_name=UPDATE_CONTACT_TOOL_NAME,
+        arguments={"customer_id": customer_id, "contact_type": contact_type, "value": value},
+    )
+    return (
+        f"Proposed (reference {execution.id}): set {contact_type} to {value}. "
+        "Read this back to the caller and ask them to confirm before calling "
+        "confirm_pending_action with this exact reference."
+    )
+
+
+@function_tool(
+    description=(
+        "Confirm and carry out a previously proposed action, using the exact "
+        "reference id from the proposal. Only call this after the caller has "
+        "clearly said yes — an unclear or ambiguous reply is not confirmation."
+    )
+)
+async def confirm_pending_action(ctx: RunContext[SessionData], execution_id: str) -> str:
+    """Args: execution_id: the reference id returned by the proposal."""
+    return await confirm_tool_execution(ctx.userdata, execution_id)
+
+
+@function_tool(
+    description=(
+        "Cancel a previously proposed action if the caller declines it or "
+        "changes their mind before confirming."
+    )
+)
+async def cancel_pending_action(ctx: RunContext[SessionData], execution_id: str) -> str:
+    """Args: execution_id: the reference id returned by the proposal."""
+    return await reject_tool_execution(ctx.userdata, execution_id)
