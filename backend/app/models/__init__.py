@@ -13,6 +13,13 @@ from app.models.conversation import (
     TurnLatencyMetric,
     TurnRole,
 )
+from app.models.knowledge import (
+    EMBEDDING_DIM,
+    DocumentStatus,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    RetrievalEvent,
+)
 from app.models.user import Role, RoleName, User
 
 __all__ = [
@@ -25,7 +32,12 @@ __all__ = [
     "ConversationChannel",
     "ConversationStatus",
     "ConversationTurn",
+    "DocumentStatus",
+    "EMBEDDING_DIM",
+    "KnowledgeChunk",
+    "KnowledgeDocument",
     "ProviderConfig",
+    "RetrievalEvent",
     "Role",
     "RoleName",
     "TurnLatencyMetric",

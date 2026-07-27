@@ -18,6 +18,8 @@ dependencies = [
     "email-validator>=2.0",
     "livekit-agents[deepgram,openai,elevenlabs,groq,silero]>=1.2",
     "livekit-api>=1.0",
+    "pgvector>=0.3",
+    "openai>=1.40",
 ]
 
 [project.optional-dependencies]

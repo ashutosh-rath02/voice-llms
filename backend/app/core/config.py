@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     elevenlabs_api_key: str = ""
 
+    # Knowledge base / RAG (Phase 2)
+    embedding_model: str = "text-embedding-3-small"
+    retrieval_top_k: int = 5
+
 
 @lru_cache
 def get_settings() -> Settings:
