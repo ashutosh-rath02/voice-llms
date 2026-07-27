@@ -13,6 +13,14 @@ from app.models.conversation import (
     TurnLatencyMetric,
     TurnRole,
 )
+from app.models.customer import (
+    ContactType,
+    Customer,
+    CustomerContact,
+    CustomerProduct,
+    CustomerProductStatus,
+    ProductOrService,
+)
 from app.models.knowledge import (
     EMBEDDING_DIM,
     DocumentStatus,
@@ -32,10 +40,16 @@ __all__ = [
     "ConversationChannel",
     "ConversationStatus",
     "ConversationTurn",
+    "ContactType",
+    "Customer",
+    "CustomerContact",
+    "CustomerProduct",
+    "CustomerProductStatus",
     "DocumentStatus",
     "EMBEDDING_DIM",
     "KnowledgeChunk",
     "KnowledgeDocument",
+    "ProductOrService",
     "ProviderConfig",
     "RetrievalEvent",
     "Role",

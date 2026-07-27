@@ -20,33 +20,57 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch, UnauthorizedError } from "@/lib/api";
 import { VoiceSession } from "@/lib/types";
 
-interface TranscriptEntry {
+interface TranscriptPart {
   id: string;
   text: string;
   final: boolean;
+}
+
+interface TranscriptBubble {
+  key: string;
   isAgent: boolean;
+  parts: TranscriptPart[];
   at: number;
 }
 
 /** Collects live transcription segments (both parties) published into the room.
- *  Partials arrive with final=false and are replaced in place as they firm up —
- *  keyed by segment id, so an updated segment overwrites its earlier version. */
-function useTranscript(): TranscriptEntry[] {
+ *
+ * The STT provider emits a new "final" segment (with a new id) on every natural
+ * pause — e.g. spelling out an email produces several finals, not one — while
+ * the backend's own turn-detector correctly merges them into a single logical
+ * turn before it ever reaches the LLM or the database. This hook mirrors that:
+ * consecutive segments from the same speaker are grouped into one growing
+ * bubble, and only a speaker change starts a new one. A segment matching the
+ * id of the latest part updates that part in place (partial -> final refinement).
+ */
+function useTranscript(): TranscriptBubble[] {
   const room = useRoomContext();
-  const [entries, setEntries] = useState<Map<string, TranscriptEntry>>(new Map());
+  const [bubbles, setBubbles] = useState<TranscriptBubble[]>([]);
 
   useEffect(() => {
     const handler = (segments: TranscriptionSegment[], participant?: Participant) => {
-      setEntries((prev) => {
-        const next = new Map(prev);
+      const isAgent = participant?.isAgent ?? false;
+      setBubbles((prev) => {
+        const next = [...prev];
         for (const s of segments) {
-          next.set(s.id, {
-            id: s.id,
-            text: s.text,
-            final: s.final,
-            isAgent: participant?.isAgent ?? false,
-            at: next.get(s.id)?.at ?? s.firstReceivedTime ?? Date.now(),
-          });
+          const last = next[next.length - 1];
+          const part: TranscriptPart = { id: s.id, text: s.text, final: s.final };
+          const existingIndex = last?.parts.findIndex((p) => p.id === s.id) ?? -1;
+
+          if (last && existingIndex !== -1) {
+            const parts = [...last.parts];
+            parts[existingIndex] = part;
+            next[next.length - 1] = { ...last, parts };
+          } else if (last && last.isAgent === isAgent) {
+            next[next.length - 1] = { ...last, parts: [...last.parts, part] };
+          } else {
+            next.push({
+              key: s.id,
+              isAgent,
+              parts: [part],
+              at: s.firstReceivedTime ?? Date.now(),
+            });
+          }
         }
         return next;
       });
@@ -57,7 +81,7 @@ function useTranscript(): TranscriptEntry[] {
     };
   }, [room]);
 
-  return [...entries.values()].sort((a, b) => a.at - b.at);
+  return bubbles;
 }
 
 const AGENT_STATE_STYLE: Record<string, { label: string; cls: string }> = {
@@ -104,21 +128,25 @@ function CallUI() {
             Say hello — the agent is {agentState === "listening" ? "listening" : "starting up"}.
           </p>
         )}
-        {transcript.map((e) => (
-          <div key={e.id} className={`flex ${e.isAgent ? "justify-start" : "justify-end"}`}>
-            <div
-              className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
-                e.isAgent ? "bg-slate-800 text-slate-100" : "bg-sky-700 text-white"
-              } ${e.final ? "" : "opacity-60"}`}
-            >
-              <span className="mb-0.5 block text-[10px] uppercase tracking-wide opacity-60">
-                {e.isAgent ? "Agent" : "You"}
-                {!e.final && " · …"}
-              </span>
-              {e.text}
+        {transcript.map((b) => {
+          const text = b.parts.map((p) => p.text).join(" ");
+          const isFinal = b.parts[b.parts.length - 1].final;
+          return (
+            <div key={b.key} className={`flex ${b.isAgent ? "justify-start" : "justify-end"}`}>
+              <div
+                className={`max-w-[75%] rounded-2xl px-4 py-2 text-sm ${
+                  b.isAgent ? "bg-slate-800 text-slate-100" : "bg-sky-700 text-white"
+                } ${isFinal ? "" : "opacity-60"}`}
+              >
+                <span className="mb-0.5 block text-[10px] uppercase tracking-wide opacity-60">
+                  {b.isAgent ? "Agent" : "You"}
+                  {!isFinal && " · …"}
+                </span>
+                {text}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 

@@ -24,7 +24,19 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from app.core import db, security
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
-from app.models import AgentVersion, AgentVersionStatus, ProviderConfig, Role, RoleName, User
+from app.models import (
+    AgentVersion,
+    AgentVersionStatus,
+    ContactType,
+    Customer,
+    CustomerContact,
+    CustomerProduct,
+    ProductOrService,
+    ProviderConfig,
+    Role,
+    RoleName,
+    User,
+)
 
 log = structlog.get_logger()
 
@@ -61,7 +73,7 @@ AGENT_VERSIONS = [
     },
     {
         "version_label": "v0.2.0",
-        "status": AgentVersionStatus.ACTIVE,
+        "status": AgentVersionStatus.ACTIVE,  # historical; demoted below once v0.3.0 exists
         "system_prompt": (
             "You are a friendly customer-support voice agent for smart-home device "
             f"support. {VOICE_STYLE_RULES}\n\n"
@@ -86,10 +98,44 @@ AGENT_VERSIONS = [
         "tts_voice": "pending-selection",
         "config": {"llm_temperature": 0.4},
     },
+    {
+        "version_label": "v0.3.0",
+        "status": AgentVersionStatus.ACTIVE,
+        "system_prompt": (
+            "You are a friendly customer-support voice agent for smart-home device "
+            f"support. {VOICE_STYLE_RULES}\n\n"
+            "Early in the conversation, once the caller has explained why they're "
+            "calling, ask for their email address or phone number and call "
+            "lookup_customer with what they give you — this confirms their identity "
+            "and shows you what devices they have registered. Do not call it before "
+            "they've given you a contact value, and do not insist if they'd rather "
+            "not: continue helping them without an account. Once identified, use "
+            "their name and registered devices naturally in conversation.\n\n"
+            "You have a search_knowledge_base tool over real product documentation. "
+            "Whenever the user asks how to set up, configure, or fix a specific device "
+            "or integration, call the tool with their question before answering — do "
+            "not answer setup steps, settings, or troubleshooting details from memory. "
+            "When you answer from the tool's results, mention which product or "
+            "integration the information is about so the user knows it is grounded, "
+            "not guessed.\n\n"
+            "If the tool finds nothing relevant, or you are not confident the results "
+            "actually answer what the user asked, say plainly that you don't have "
+            "reliable information on that and offer to connect them with a human "
+            "support agent. Never invent setup steps, settings, or error resolutions."
+        ),
+        "llm_provider": "openai",
+        "llm_model": "gpt-4o-mini",
+        "stt_provider": "deepgram",
+        "stt_model": "nova-2",
+        "tts_provider": "elevenlabs",
+        "tts_model": "eleven_flash_v2_5",
+        "tts_voice": "pending-selection",
+        "config": {"llm_temperature": 0.4},
+    },
 ]
 
 # Exactly one AgentVersion is ACTIVE at a time; this is the one seed() enforces.
-ACTIVE_VERSION_LABEL = "v0.2.0"
+ACTIVE_VERSION_LABEL = "v0.3.0"
 
 DEFAULT_TURN_DETECTION = {
     "name": "turn_detection.default",
@@ -100,6 +146,67 @@ DEFAULT_TURN_DETECTION = {
         "min_interruption_duration_s": 0.5,
     },
 }
+
+# Device catalog — names chosen to match real integrations in the ingested
+# Home Assistant knowledge base, so a customer's registered product and the
+# agent's retrieval results are about the same real thing end to end.
+PRODUCTS = [
+    {
+        "name": "Zigbee Home Automation Hub",
+        "category": "Hub",
+        "description": "Zigbee coordinator for pairing Zigbee-based smart devices (ZHA).",
+    },
+    {
+        "name": "Z-Wave USB Controller",
+        "category": "Hub",
+        "description": "USB Z-Wave stick used to build and control a Z-Wave mesh network.",
+    },
+    {
+        "name": "MQTT Smart Plug",
+        "category": "Switch",
+        "description": "Wi-Fi smart plug that publishes state over MQTT.",
+    },
+    {
+        "name": "Philips Hue Bridge",
+        "category": "Hub",
+        "description": "Bridge connecting Philips Hue smart lights to the local network.",
+    },
+    {
+        "name": "Google Nest Thermostat",
+        "category": "Climate",
+        "description": "Wi-Fi connected thermostat integrated via the Google Nest account.",
+    },
+]
+
+# (full_name, [(contact_type, value, is_primary), ...], [product names])
+CUSTOMERS = [
+    (
+        "Priya Sharma",
+        [
+            (ContactType.EMAIL, "priya.sharma@example.com", True),
+            (ContactType.PHONE, "+91-98765-43210", False),
+        ],
+        ["Zigbee Home Automation Hub"],
+    ),
+    (
+        "Rahul Mehta",
+        [(ContactType.EMAIL, "rahul.mehta@example.com", True)],
+        ["Z-Wave USB Controller", "MQTT Smart Plug"],
+    ),
+    (
+        "Ananya Iyer",
+        [
+            (ContactType.EMAIL, "ananya.iyer@example.com", True),
+            (ContactType.PHONE, "+91-91234-56789", False),
+        ],
+        ["Philips Hue Bridge"],
+    ),
+    (
+        "David Chen",
+        [(ContactType.EMAIL, "david.chen@example.com", True)],
+        ["Google Nest Thermostat"],
+    ),
+]
 
 
 async def seed(engine: AsyncEngine, settings: Settings) -> None:
@@ -124,6 +231,46 @@ async def seed(engine: AsyncEngine, settings: Settings) -> None:
             .on_conflict_do_nothing(index_elements=["email"])
         )
         log.info("seeded_admin_user", inserted=result.rowcount, email=settings.seed_admin_email)
+
+        for product in PRODUCTS:
+            await session.execute(
+                insert(ProductOrService)
+                .values(**product)
+                .on_conflict_do_nothing(index_elements=["name"])
+            )
+        product_ids = {
+            p.name: p.id for p in (await session.execute(select(ProductOrService))).scalars()
+        }
+
+        customers_inserted = 0
+        for full_name, contacts, product_names in CUSTOMERS:
+            primary_email = next(v for _, v, is_primary in contacts if is_primary)
+            already_exists = (
+                await session.execute(
+                    select(CustomerContact.id).where(CustomerContact.value == primary_email)
+                )
+            ).scalar_one_or_none()
+            if already_exists:
+                continue
+            customer = Customer(full_name=full_name)
+            session.add(customer)
+            await session.flush()  # assigns customer.id for the FK rows below
+            session.add_all(
+                CustomerContact(
+                    customer_id=customer.id, contact_type=ctype, value=value, is_primary=primary
+                )
+                for ctype, value, primary in contacts
+            )
+            session.add_all(
+                CustomerProduct(customer_id=customer.id, product_id=product_ids[name])
+                for name in product_names
+            )
+            customers_inserted += 1
+        log.info(
+            "seeded_customers",
+            inserted=customers_inserted,
+            skipped=len(CUSTOMERS) - customers_inserted,
+        )
 
         for version in AGENT_VERSIONS:
             result = await session.execute(

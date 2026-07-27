@@ -29,11 +29,12 @@ async def list_conversations(
     session: DbSession,
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
-) -> list[Conversation]:
+) -> list[ConversationSummary]:
     """Customers see their own sessions; staff see everything (including
     ad-hoc test rooms that have no user attached)."""
     query = (
         select(Conversation)
+        .options(selectinload(Conversation.customer))
         .where(Conversation.deleted_at.is_(None))
         .order_by(Conversation.created_at.desc())
         .limit(limit)
@@ -41,7 +42,13 @@ async def list_conversations(
     )
     if not _is_staff(user):
         query = query.where(Conversation.user_id == user.id)
-    return list((await session.execute(query)).scalars().all())
+    conversations = (await session.execute(query)).scalars().all()
+    return [
+        ConversationSummary.model_validate(c).model_copy(
+            update={"customer_name": c.customer.full_name if c.customer else None}
+        )
+        for c in conversations
+    ]
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
@@ -54,6 +61,7 @@ async def get_conversation(
             .options(
                 selectinload(Conversation.turns).selectinload(ConversationTurn.latency),
                 selectinload(Conversation.state_events),
+                selectinload(Conversation.customer),
             )
             .where(Conversation.id == conversation_id, Conversation.deleted_at.is_(None))
         )
@@ -81,8 +89,11 @@ async def get_conversation(
         )
     ).scalars().all()
 
+    summary = ConversationSummary.model_validate(conversation).model_copy(
+        update={"customer_name": conversation.customer.full_name if conversation.customer else None}
+    )
     return ConversationDetail(
-        **ConversationSummary.model_validate(conversation).model_dump(),
+        **summary.model_dump(),
         agent_version_label=agent_version_label,
         turns=[
             TurnOut(

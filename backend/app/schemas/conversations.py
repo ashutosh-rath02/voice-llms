@@ -61,6 +61,8 @@ class ConversationSummary(BaseModel):
     channel: str
     status: str
     outcome: str | None
+    customer_id: uuid.UUID | None
+    customer_name: str | None = None
     started_at: datetime | None
     ended_at: datetime | None
     created_at: datetime

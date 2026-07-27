@@ -1,7 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -14,6 +14,9 @@ from app.models.base import (
     UUIDPrimaryKeyMixin,
     str_enum,
 )
+
+if TYPE_CHECKING:
+    from app.models.customer import Customer
 
 
 class ConversationChannel(enum.StrEnum):
@@ -60,6 +63,10 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Nullable: Phase 4 phone callers are identified mid-call (or never);
     # browser sessions always set it from the authenticated user.
     user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
+    # Set by the lookup_customer tool once the agent identifies the caller —
+    # distinct from user_id (platform login) since a caller may authenticate
+    # by voice (email/phone) without ever having a web account.
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id"), index=True)
     agent_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agent_versions.id"))
 
     channel: Mapped[ConversationChannel] = mapped_column(str_enum(ConversationChannel))
@@ -78,6 +85,11 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     summary: Mapped[str | None] = mapped_column(Text)
 
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # One-directional: Customer doesn't need to enumerate all its calls right
+    # now, so no back_populates. String ref resolves against the shared
+    # declarative registry — no import of Customer needed here.
+    customer: Mapped["Customer | None"] = relationship(viewonly=True)
 
     turns: Mapped[list["ConversationTurn"]] = relationship(
         back_populates="conversation", order_by="ConversationTurn.turn_index"

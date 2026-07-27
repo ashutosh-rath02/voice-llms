@@ -20,7 +20,7 @@ from openai import AsyncOpenAI
 from sqlalchemy import select
 
 from app.agent.recorder import ConversationRecorder
-from app.agent.tools import SessionData, search_knowledge_base
+from app.agent.tools import SessionData, lookup_customer, search_knowledge_base
 from app.core import db
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -160,7 +160,8 @@ async def entrypoint(ctx: JobContext) -> None:
 
     await ctx.connect()
     agent = Agent(
-        instructions=agent_version.system_prompt, tools=[search_knowledge_base]
+        instructions=agent_version.system_prompt,
+        tools=[search_knowledge_base, lookup_customer],
     )
     await session.start(agent=agent, room=ctx.room)
     await recorder.record_state(AgentState.GREETING, reason="session_started")

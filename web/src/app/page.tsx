@@ -100,6 +100,12 @@ export default function HomePage() {
                       <p className="text-xs text-slate-500">
                         {fmtTime(c.started_at ?? c.created_at)} · {c.channel} ·{" "}
                         {duration(c.started_at, c.ended_at)}
+                        {c.customer_name && (
+                          <>
+                            {" "}
+                            · <span className="text-emerald-400">{c.customer_name}</span>
+                          </>
+                        )}
                       </p>
                     </div>
                     <span

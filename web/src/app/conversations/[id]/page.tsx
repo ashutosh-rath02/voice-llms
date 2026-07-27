@@ -124,6 +124,12 @@ export default function ReplayPage() {
             {detail.status} · {detail.channel} · agent {detail.agent_version_label} ·{" "}
             {detail.started_at ? new Date(detail.started_at).toLocaleString() : "not started"}
           </p>
+          {detail.customer_name && (
+            <p className="text-sm">
+              <span className="text-slate-500">Customer: </span>
+              <span className="text-emerald-400">{detail.customer_name}</span>
+            </p>
+          )}
         </header>
 
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">

@@ -62,6 +62,8 @@ export interface ConversationSummary {
   channel: string;
   status: string;
   outcome: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
   started_at: string | null;
   ended_at: string | null;
   created_at: string;
