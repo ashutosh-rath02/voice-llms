@@ -34,7 +34,8 @@ class Settings(BaseSettings):
 
     # Auth. The default secret only exists so local dev works out of the box;
     # staging/prod MUST override JWT_SECRET (rotating it invalidates all tokens).
-    jwt_secret: str = "dev-only-secret-change-me"
+    # 32+ bytes: HS256's minimum recommended key length (PyJWT warns below it).
+    jwt_secret: str = "dev-only-insecure-secret-change-me-0123456789abcdef01234567"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
 
