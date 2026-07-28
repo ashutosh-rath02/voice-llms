@@ -69,13 +69,13 @@ Goal: an authenticated user opens the web app, talks to the agent (streaming STT
 - [x] Event hooks → persistence via ConversationRecorder: partials (buffered into turn.extra), final turns, state events, ad-hoc room handling.
 - [x] Latency capture per turn: STT transcription delay, LLM TTFT, TTS TTFB, computed total → `turn_latency_metrics` (+ raw JSONB).
 - [x] Graceful shutdown callback finalizes the conversation row.
-- [ ] Live audio verification (user speaks to the agent, then inspect persisted turns/latency).
+- [x] Live audio verification — many real calls since (Phase 2b/3a/3b testing), transcripts/latency confirmed correct each time.
 
 ### 3.5 Web client
 - [x] Next.js 16 app (TypeScript, Tailwind 4) with login; voice page joins the LiveKit room with mic, agent-state pill, mute, end-call.
 - [x] Live transcript pane via room transcription events (partials at reduced opacity, replaced in place when final); agent state indicator (listening/thinking/speaking).
 - [x] Reconnecting banner (LiveKit auto-reconnect) + mic-failure fallback message. CORS middleware added to API (was missing — blocked all browser calls).
-- [ ] Live browser test by user.
+- [x] Live browser test by user — done repeatedly; also surfaced and fixed a real live-transcript grouping bug (see Phase 3a).
 
 ### 3.6 Replay
 - [x] `GET /conversations` + detail endpoint: turns, state history, latency per turn; customers see own, staff see all; foreign ids 404.
@@ -112,8 +112,23 @@ Accounts needed from the user before 3c–3e can go live: a fine-grained GitHub 
 - **Phase 6 — Evals & observability:** simulated-caller suites (text + prerecorded audio), tool/retrieval/latency/confirmation assertions, failure injection, regression comparison across agent versions, release gating, dashboards.
 - **Phase 7 — Hardening:** timeouts/retries/circuit breakers, provider fallback, PII masking, retention/deletion workflows, cost tracking, load tests, security review.
 
-## 5. Immediate Next Steps
+## 5. Immediate Next Steps (historical — superseded, kept for record)
 
-1. Confirm decisions D1–D5, D8 (or adjust).
-2. Create provider accounts + API keys: LiveKit Cloud, Deepgram, Anthropic, ElevenLabs.
-3. Start §3.1 scaffolding.
+1. ~~Confirm decisions D1–D5, D8 (or adjust).~~ Done; D3 later revised OpenAI→Anthropic→**OpenAI+Groq** per user decision.
+2. ~~Create provider accounts + API keys: LiveKit Cloud, Deepgram, Anthropic, ElevenLabs.~~ Done (Anthropic swapped for OpenAI+Groq).
+3. ~~Start §3.1 scaffolding.~~ Done — see §3.1.
+
+See §6 below for what's actually next as of this writing.
+
+## 6. Current Status Snapshot
+
+**Done:** Milestone 1 (browser voice, auth, replay, latency tracing) in full except staging deploy execution; Phase 2 (RAG) in full; Phase 3a+3b (customer identification, confirmation safety layer) in full.
+
+**Genuinely pending:**
+- CI type-checking job (mypy/pyright) — not added; ruff + build + docker-build are.
+- Staging deployment **execution** — Dockerfile/CI/runbook are done and untested in the real world; Railway/Vercel accounts, a LiveKit staging project, provisioning, and a live smoke test have not happened (deliberately deferred by user).
+- Phase 3c/3d/3e (ticketing, scheduling, messaging) — architecture ready, blocked on user providing a GitHub PAT, Cal.com API key, Resend API key.
+- Phase 4 (telephony) — not started; D6 (Twilio vs Exotel/Plivo) still undecided.
+- Phase 5 (multilingual Hindi/Hinglish) — not started; STT is currently hardcoded to `language="en"` in worker.py.
+- Phase 6 (automated evals, observability dashboards) — not started.
+- Phase 7 (hardening: retries, circuit breakers, PII masking, retention, cost tracking, load/security review) — not started.
